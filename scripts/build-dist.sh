@@ -30,7 +30,7 @@ mkdir -p "$BUILD_DIR/$APP_BUNDLE/Contents/Resources"
 
 cp ".build/release/$APP_NAME"              "$BUILD_DIR/$APP_BUNDLE/Contents/MacOS/"
 cp "Support/Info.plist"                    "$BUILD_DIR/$APP_BUNDLE/Contents/"
-cp -r ".build/release/${APP_NAME}_${APP_NAME}.bundle" "$BUILD_DIR/$APP_BUNDLE/Contents/Resources/"
+cp -r ".build/release/${APP_NAME}_${APP_NAME}.bundle" "$BUILD_DIR/$APP_BUNDLE/"
 
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
     echo "==> Signing with: $SIGNING_IDENTITY"
