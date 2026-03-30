@@ -77,9 +77,11 @@ final class StatusOverlayWindow: NSPanel {
             context.duration = 0.2
             self.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
-            self?.indicatorView.update(.hidden)
-            self?.orderOut(nil)
-            self?.alphaValue = 1.0
+            Task { @MainActor in
+                self?.indicatorView.update(.hidden)
+                self?.orderOut(nil)
+                self?.alphaValue = 1.0
+            }
         })
     }
 
