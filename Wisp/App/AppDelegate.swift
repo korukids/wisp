@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var logWindow: LogWindow?
     private var escapeMonitor: Any?
     private var launchOnStartupItem: NSMenuItem?
+    private static let microphoneItemTag = 999
 
     // Cancel-countdown state
     private var shouldPasteAfterProcessing = false
@@ -123,6 +124,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let isEnabled = SMAppService.mainApp.status == .enabled
         preferencesStore?.syncLaunchOnStartup(isEnabled)
         launchOnStartupItem?.state = isEnabled ? .on : .off
+        rebuildMicrophoneItems(in: menu)
+    }
+
+    private func rebuildMicrophoneItems(in menu: NSMenu) {
+        // Remove previous mic items
+        menu.items
+            .filter { $0.tag == Self.microphoneItemTag }
+            .forEach { menu.removeItem($0) }
+
+        // Insert mic items before the last separator + Quit (i.e. before the final 2 items)
+        let insertionIndex = max(menu.items.count - 2, 0)
+
+        let selectedUID = preferencesStore?.selectedMicrophoneUID
+        var index = insertionIndex
+
+        func addMicItem(_ item: NSMenuItem) {
+            item.tag = Self.microphoneItemTag
+            menu.insertItem(item, at: index)
+            index += 1
+        }
+
+        let header = NSMenuItem(title: "Microphone", action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        addMicItem(header)
+
+        let defaultItem = NSMenuItem(
+            title: "  System Default",
+            action: #selector(selectMicrophone(_:)),
+            keyEquivalent: ""
+        )
+        defaultItem.representedObject = nil
+        defaultItem.state = (selectedUID == nil) ? .on : .off
+        addMicItem(defaultItem)
+
+        let devices = microphoneList?.devices ?? []
+        for device in devices {
+            let label = device.isDefault
+                ? "  \(device.displayName) (Default)"
+                : "  \(device.displayName)"
+            let item = NSMenuItem(
+                title: label,
+                action: #selector(selectMicrophone(_:)),
+                keyEquivalent: ""
+            )
+            item.representedObject = device.uid
+            item.state = (selectedUID == device.uid) ? .on : .off
+            addMicItem(item)
+        }
+
+        let trailing = NSMenuItem.separator()
+        trailing.tag = Self.microphoneItemTag
+        menu.insertItem(trailing, at: index)
+    }
+
+    @objc private func selectMicrophone(_ sender: NSMenuItem) {
+        let uid = sender.representedObject as? String
+        preferencesStore?.setMicrophoneUID(uid)
     }
 
     private func setupOverlay() {
