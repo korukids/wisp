@@ -7,11 +7,14 @@ struct PreferencesView: View {
     let microphoneList: MicrophoneList
     @Bindable var wordDictionary: WordDictionaryStore
 
+    @State private var apiKeyDraft: String = ""
+    @State private var apiKeySaved: Bool = false
     @State private var promptDraft: String = ""
     @State private var promptError: String? = nil
 
     var body: some View {
         Form {
+            apiKeySection
             shortcutSection
             microphoneSection
             startupSection
@@ -26,6 +29,37 @@ struct PreferencesView: View {
     }
 
     // MARK: - Sections
+
+    private var apiKeySection: some View {
+        Section("ElevenLabs API Key") {
+            if preferences.apiKey != nil, apiKeyDraft.isEmpty {
+                HStack {
+                    Label("API key is configured", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Spacer()
+                    Button("Remove") {
+                        preferences.setApiKey(nil)
+                        apiKeyDraft = ""
+                        apiKeySaved = false
+                    }
+                    .foregroundStyle(.red)
+                }
+            } else {
+                SecureField("Paste your API key", text: $apiKeyDraft)
+                    .onSubmit { saveApiKey() }
+                HStack {
+                    if apiKeySaved {
+                        Label("Saved", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                    }
+                    Spacer()
+                    Button("Save") { saveApiKey() }
+                        .disabled(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
 
     private var shortcutSection: some View {
         Section("Recording Shortcut") {
@@ -111,6 +145,14 @@ struct PreferencesView: View {
     }
 
     // MARK: - Actions
+
+    private func saveApiKey() {
+        let trimmed = apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        preferences.setApiKey(trimmed)
+        apiKeyDraft = ""
+        apiKeySaved = true
+    }
 
     private func commitPrompt() {
         do {

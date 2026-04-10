@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Security
 import ServiceManagement
 
 enum PreferencesError: Error, Equatable {
@@ -20,6 +21,7 @@ final class PreferencesStore {
         - If the input is already clean, return it unchanged
         """
 
+    private(set) var apiKey: String?
     private(set) var cleanupPrompt: String
     private(set) var selectedMicrophoneUID: String?
     private(set) var launchOnStartup: Bool
@@ -30,15 +32,67 @@ final class PreferencesStore {
         static let cleanupPrompt = "com.wisp.cleanupPrompt"
         static let selectedMicrophoneUID = "com.wisp.selectedMicrophoneUID"
         static let launchOnStartup = "com.wisp.launchOnStartup"
+        static let apiKeyService = "com.wisp.api-key"
+        static let apiKeyAccount = "elevenlabs"
     }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        self.apiKey = Self.loadApiKeyFromKeychain()
         let stored = defaults.string(forKey: Keys.cleanupPrompt) ?? ""
         let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
         self.cleanupPrompt = trimmed.isEmpty ? Self.defaultCleanupPrompt : trimmed
         self.selectedMicrophoneUID = defaults.string(forKey: Keys.selectedMicrophoneUID)
         self.launchOnStartup = defaults.bool(forKey: Keys.launchOnStartup)
+    }
+
+    // MARK: - API Key (Keychain)
+
+    func setApiKey(_ key: String?) {
+        if let key, !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+            apiKey = trimmed
+            Self.saveApiKeyToKeychain(trimmed)
+        } else {
+            apiKey = nil
+            Self.deleteApiKeyFromKeychain()
+        }
+    }
+
+    private static func saveApiKeyToKeychain(_ value: String) {
+        let data = Data(value.utf8)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Keys.apiKeyService,
+            kSecAttrAccount as String: Keys.apiKeyAccount,
+        ]
+        SecItemDelete(query as CFDictionary)
+        var attrs = query
+        attrs[kSecValueData as String] = data
+        SecItemAdd(attrs as CFDictionary, nil)
+    }
+
+    private static func loadApiKeyFromKeychain() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Keys.apiKeyService,
+            kSecAttrAccount as String: Keys.apiKeyAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func deleteApiKeyFromKeychain() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Keys.apiKeyService,
+            kSecAttrAccount as String: Keys.apiKeyAccount,
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 
     // MARK: - Cleanup Prompt

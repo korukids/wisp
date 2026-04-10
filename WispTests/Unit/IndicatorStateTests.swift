@@ -3,10 +3,6 @@ import XCTest
 
 final class IndicatorStateTests: XCTestCase {
 
-    func testLoadingMapsToModelLoading() {
-        XCTAssertEqual(IndicatorState.from(.loading), .modelLoading)
-    }
-
     func testIdleMapsToHidden() {
         XCTAssertEqual(IndicatorState.from(.idle), .hidden)
     }

@@ -30,10 +30,10 @@ final class ErrorHandlingTests: XCTestCase {
         }
     }
 
-    func testModelNotLoadedError() {
-        let result = TranscriptionResult.failed(error: .modelNotLoaded)
+    func testModelNotAvailableError() {
+        let result = TranscriptionResult.failed(error: .processingFailed(message: "Model not available"))
         if case .failed(let error) = result {
-            XCTAssertEqual(error, .modelNotLoaded)
+            XCTAssertEqual(error, .processingFailed(message: "Model not available"))
         } else {
             XCTFail("Expected failed result")
         }

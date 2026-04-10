@@ -45,16 +45,6 @@ final class StatusIndicatorView: NSView {
         errorDismissWork = nil
 
         switch state {
-        case .modelLoading:
-            label.stringValue = "Loading model..."
-            label.textColor = .secondaryLabelColor
-            spinner.isHidden = false
-            spinner.startAnimation(nil)
-            recordingDot.isHidden = true
-            recordingDot.layer?.removeAllAnimations()
-            stopCancelProgressAnimation()
-            isHidden = false
-
         case .recording:
             label.stringValue = "Recording..."
             label.textColor = NSColor.systemRed

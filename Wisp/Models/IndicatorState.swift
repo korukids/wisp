@@ -1,7 +1,6 @@
 import Foundation
 
 enum IndicatorState: Equatable, Sendable {
-    case modelLoading
     case recording
     case cancelling
     case transcribing
@@ -10,8 +9,6 @@ enum IndicatorState: Equatable, Sendable {
 
     static func from(_ appState: AppState) -> IndicatorState {
         switch appState {
-        case .loading:
-            return .modelLoading
         case .idle:
             return .hidden
         case .recording:

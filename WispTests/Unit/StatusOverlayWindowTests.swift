@@ -46,15 +46,9 @@ final class StatusOverlayWindowTests: XCTestCase {
         XCTAssertEqual(window.level, expectedLevel)
     }
 
-    func testShowWithModelLoadingSetsFloatingLevel() {
-        let window = StatusOverlayWindow()
-        window.show(state: .modelLoading)
-        XCTAssertEqual(window.level, .floating)
-    }
-
     func testHideOrdersOut() {
         let window = StatusOverlayWindow()
-        window.show(state: .modelLoading)
+        window.show(state: .recording)
         XCTAssertTrue(window.isVisible)
         window.hide()
         // Animation completes asynchronously; verify after a short delay

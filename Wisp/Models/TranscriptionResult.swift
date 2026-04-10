@@ -12,7 +12,6 @@ enum DiscardReason: String, Sendable, Equatable {
 }
 
 enum TranscriptionError: Error, Sendable, Equatable {
-    case modelNotLoaded
     case processingFailed(message: String)
     case microphoneUnavailable
     case permissionDenied

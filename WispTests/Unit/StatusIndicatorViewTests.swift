@@ -17,29 +17,6 @@ final class StatusIndicatorViewTests: XCTestCase {
         view.subviews.compactMap { $0 as? NSProgressIndicator }.first
     }
 
-    // MARK: - Model Loading
-
-    func testModelLoadingShowsLabel() {
-        let view = makeView()
-        view.update(.modelLoading)
-        let label = findLabel(in: view)
-        XCTAssertEqual(label?.stringValue, "Loading model...")
-    }
-
-    func testModelLoadingShowsSpinner() {
-        let view = makeView()
-        view.update(.modelLoading)
-        let spinner = findSpinner(in: view)
-        XCTAssertNotNil(spinner)
-        XCTAssertFalse(spinner!.isHidden)
-    }
-
-    func testModelLoadingIsVisible() {
-        let view = makeView()
-        view.update(.modelLoading)
-        XCTAssertFalse(view.isHidden)
-    }
-
     // MARK: - Recording
 
     func testRecordingShowsLabel() {
@@ -105,7 +82,7 @@ final class StatusIndicatorViewTests: XCTestCase {
 
     func testHiddenHidesView() {
         let view = makeView()
-        view.update(.modelLoading)
+        view.update(.recording)
         XCTAssertFalse(view.isHidden)
         view.update(.hidden)
         XCTAssertTrue(view.isHidden)
