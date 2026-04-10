@@ -216,6 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             print("[Wisp] Recording too short, discarding without countdown")
             _ = audioCaptureService?.stopRecording()
             audioCaptureService?.onAudioChunk = nil
+            audioCaptureService?.onAudioLevels = nil
             transcriptionService?.cancel()
             handleResult(.discarded(reason: .tooShort))
             return
@@ -223,6 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         _ = audioCaptureService?.stopRecording()
         audioCaptureService?.onAudioChunk = nil
+        audioCaptureService?.onAudioLevels = nil
 
         guard case .success(let newState) = state.transition(to: .cancelling) else {
             print("[Wisp] State transition to cancelling failed")
@@ -337,6 +339,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.audioCaptureService?.onAudioChunk = { data in
             service?.sendAudioChunk(data)
         }
+        self.audioCaptureService?.onAudioLevels = { [weak self] levels in
+            DispatchQueue.main.async {
+                self?.overlayWindow?.updateAudioLevels(levels)
+            }
+        }
         self.audioCaptureService?.startRecording { [weak self] result in
             DispatchQueue.main.async {
                 self?.handleAutoStop(result: result)
@@ -385,6 +392,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             print("[Wisp] Recording too short, discarding")
             _ = audioCaptureService?.stopRecording()
             audioCaptureService?.onAudioChunk = nil
+            audioCaptureService?.onAudioLevels = nil
             transcriptionService?.cancel()
             handleResult(.discarded(reason: .tooShort))
             return
@@ -392,6 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         _ = audioCaptureService?.stopRecording()
         audioCaptureService?.onAudioChunk = nil
+        audioCaptureService?.onAudioLevels = nil
 
         Task {
             await commitAndPaste()
@@ -411,6 +420,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             overlayWindow?.show(state: .transcribing)
             currentSession?.stop()
             audioCaptureService?.onAudioChunk = nil
+            audioCaptureService?.onAudioLevels = nil
             notificationService?.show(
                 title: "Maximum Duration Reached",
                 message: "Recording stopped after 5 minutes."

@@ -17,13 +17,25 @@ final class StatusIndicatorViewTests: XCTestCase {
         view.subviews.compactMap { $0 as? NSProgressIndicator }.first
     }
 
+    private func findWaveformBars(in view: NSView) -> NSView? {
+        view.subviews.first { $0 is WaveformBarsView }
+    }
+
     // MARK: - Recording
 
-    func testRecordingShowsLabel() {
+    func testRecordingShowsWaveformBars() {
+        let view = makeView()
+        view.update(.recording)
+        let waveform = findWaveformBars(in: view)
+        XCTAssertNotNil(waveform, "Waveform bars should exist as subview")
+        XCTAssertFalse(waveform!.isHidden, "Waveform bars should be visible during recording")
+    }
+
+    func testRecordingHidesLabel() {
         let view = makeView()
         view.update(.recording)
         let label = findLabel(in: view)
-        XCTAssertEqual(label?.stringValue, "Recording...")
+        XCTAssertTrue(label?.isHidden ?? false, "Label should be hidden during recording")
     }
 
     func testRecordingHidesSpinner() {
@@ -37,6 +49,60 @@ final class StatusIndicatorViewTests: XCTestCase {
         let view = makeView()
         view.update(.recording)
         XCTAssertFalse(view.isHidden)
+    }
+
+    // MARK: - Waveform Bars
+
+    func testWaveformBarsHasFiveLayers() {
+        let view = makeView()
+        view.update(.recording)
+        guard let waveform = findWaveformBars(in: view) as? WaveformBarsView else {
+            XCTFail("WaveformBarsView not found")
+            return
+        }
+        let barLayers = waveform.layer?.sublayers?.filter { $0.name == "bar" } ?? []
+        XCTAssertEqual(barLayers.count, 5, "Should have exactly 5 bar layers")
+    }
+
+    func testWaveformBarsHiddenWhenTranscribing() {
+        let view = makeView()
+        view.update(.recording)
+        view.update(.transcribing)
+        let waveform = findWaveformBars(in: view)
+        XCTAssertTrue(waveform?.isHidden ?? true, "Waveform bars should be hidden when transcribing")
+    }
+
+    func testWaveformBarsHiddenWhenCancelling() {
+        let view = makeView()
+        view.update(.recording)
+        view.update(.cancelling)
+        let waveform = findWaveformBars(in: view)
+        XCTAssertTrue(waveform?.isHidden ?? true, "Waveform bars should be hidden when cancelling")
+    }
+
+    func testWaveformBarsHiddenWhenError() {
+        let view = makeView()
+        view.update(.recording)
+        view.update(.error("test"))
+        let waveform = findWaveformBars(in: view)
+        XCTAssertTrue(waveform?.isHidden ?? true, "Waveform bars should be hidden on error")
+    }
+
+    func testWaveformBarsHiddenWhenHidden() {
+        let view = makeView()
+        view.update(.recording)
+        view.update(.hidden)
+        let waveform = findWaveformBars(in: view)
+        XCTAssertTrue(waveform?.isHidden ?? true, "Waveform bars should be hidden when state is hidden")
+    }
+
+    func testLabelRestoredWhenTranscribing() {
+        let view = makeView()
+        view.update(.recording)
+        view.update(.transcribing)
+        let label = findLabel(in: view)
+        XCTAssertFalse(label?.isHidden ?? true, "Label should be visible when transcribing")
+        XCTAssertEqual(label?.stringValue, "Transcribing...")
     }
 
     // MARK: - Transcribing

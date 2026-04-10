@@ -16,6 +16,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-10
 - UserDefaults (`com.wisp.wordDictionary` → `[String]`) (007-custom-word-dictionary)
 - Swift 6.2 with strict concurrency checking + KeyboardShortcuts 2.x (existing), URLSessionWebSocketTask (system framework), AVFoundation (existing) (008-elevenlabs-speech-to-text)
 - UserDefaults (existing preferences, word dictionary), `.env` file (API key) (008-elevenlabs-speech-to-text)
+- Swift 6.1+ with strict concurrency checking enabled + AVFoundation (existing audio capture), AppKit (existing indicator UI), Core Animation (bar rendering) (009-recording-waveform)
+- N/A — waveform is ephemeral visual state only (009-recording-waveform)
 
 - Swift 5.9+ with strict concurrency checking + WhisperKit (Argmax), KeyboardShortcuts (Sindre Sorhus), AppKi (001-core-dictation-flow)
 
@@ -35,9 +37,9 @@ tests/
 Swift 5.9+ with strict concurrency checking: Follow standard conventions
 
 ## Recent Changes
+- 009-recording-waveform: Added Swift 6.1+ with strict concurrency checking enabled + AVFoundation (existing audio capture), AppKit (existing indicator UI), Core Animation (bar rendering)
 - 008-elevenlabs-speech-to-text: Added Swift 6.2 with strict concurrency checking + KeyboardShortcuts 2.x (existing), URLSessionWebSocketTask (system framework), AVFoundation (existing)
 - 007-custom-word-dictionary: Added Swift 6.1+ with strict concurrency checking enabled + WhisperKit (existing), FoundationModels (existing), AppKit + SwiftUI (existing), KeyboardShortcuts (existing)
-- 006-polish-and-cleanup: Added Swift 6.1+ with strict concurrency checking enabled + AppKit (NSSound, NSStatusItem, NSMenu), ServiceManagement (SMAppService), AVFoundation (existing)
 
 
 <!-- MANUAL ADDITIONS START -->

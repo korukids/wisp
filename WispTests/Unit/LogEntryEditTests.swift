@@ -10,8 +10,8 @@ final class LogEntryEditTests: XCTestCase {
     private var testDefaults: UserDefaults!
     private var testSuiteName: String!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         testURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("wisp-test-log-\(UUID().uuidString).json")
         testSuiteName = "com.wisp.tests.\(UUID().uuidString)"
@@ -20,7 +20,7 @@ final class LogEntryEditTests: XCTestCase {
         wordDictionary = WordDictionaryStore(defaults: testDefaults)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         try? FileManager.default.removeItem(at: testURL)
         testDefaults.removePersistentDomain(forName: testSuiteName)
         logStore = nil
@@ -28,7 +28,7 @@ final class LogEntryEditTests: XCTestCase {
         testURL = nil
         testDefaults = nil
         testSuiteName = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Helpers

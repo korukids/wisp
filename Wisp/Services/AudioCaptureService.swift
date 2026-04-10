@@ -19,6 +19,10 @@ final class AudioCaptureService: @unchecked Sendable {
     /// Called with each audio chunk as it arrives from the tap, for real-time streaming.
     var onAudioChunk: (@Sendable (Data) -> Void)?
 
+    /// Called with normalized audio level values (one per bar) for waveform visualization.
+    /// Each value is in the range 0.0–1.0 after logarithmic normalization.
+    var onAudioLevels: (@Sendable ([Float]) -> Void)?
+
     private let lock = NSLock()
     private var audioEngine: AVAudioEngine?
     private var audioBuffer = Data()
@@ -92,26 +96,38 @@ final class AudioCaptureService: @unchecked Sendable {
                     return buffer
                 }
                 if status == .haveData, let channelData = convertedBuffer.floatChannelData {
+                    let frameLength = Int(convertedBuffer.frameLength)
                     let data = Data(
                         bytes: channelData[0],
-                        count: Int(convertedBuffer.frameLength) * MemoryLayout<Float>.size
+                        count: frameLength * MemoryLayout<Float>.size
+                    )
+                    let levels = AudioCaptureService.computeAudioLevels(
+                        from: channelData[0], frameCount: frameLength
                     )
                     self.lock.lock()
                     self.audioBuffer.append(data)
                     let chunkHandler = self.onAudioChunk
+                    let levelsHandler = self.onAudioLevels
                     self.lock.unlock()
                     chunkHandler?(data)
+                    levelsHandler?(levels)
                 }
             } else if let channelData = buffer.floatChannelData {
+                let frameLength = Int(buffer.frameLength)
                 let data = Data(
                     bytes: channelData[0],
-                    count: Int(buffer.frameLength) * MemoryLayout<Float>.size
+                    count: frameLength * MemoryLayout<Float>.size
+                )
+                let levels = AudioCaptureService.computeAudioLevels(
+                    from: channelData[0], frameCount: frameLength
                 )
                 self.lock.lock()
                 self.audioBuffer.append(data)
                 let chunkHandler = self.onAudioChunk
+                let levelsHandler = self.onAudioLevels
                 self.lock.unlock()
                 chunkHandler?(data)
+                levelsHandler?(levels)
             }
         }
 
@@ -145,6 +161,55 @@ final class AudioCaptureService: @unchecked Sendable {
         }
         lock.unlock()
         return stopRecordingInternal()
+    }
+
+    // MARK: - Audio Level Extraction
+
+    private static let dbFloor: Float = -50
+    private static let dbCeiling: Float = -6
+
+    /// Compute per-segment RMS levels from raw float32 PCM samples.
+    /// Splits the buffer into `barCount` equal segments, calculates RMS for each,
+    /// converts to decibel scale, and normalizes to 0.0–1.0.
+    /// Uses pointer arithmetic only — zero heap allocations.
+    static func computeAudioLevels(
+        from pointer: UnsafePointer<Float>, frameCount: Int, barCount: Int = 5
+    ) -> [Float] {
+        guard frameCount > 0 else {
+            return [Float](repeating: 0.0, count: barCount)
+        }
+
+        let segmentSize = frameCount / barCount
+        guard segmentSize > 0 else {
+            return [Float](repeating: 0.0, count: barCount)
+        }
+
+        var levels = [Float](repeating: 0.0, count: barCount)
+        let dbRange = dbCeiling - dbFloor
+
+        for bar in 0..<barCount {
+            let offset = bar * segmentSize
+            let count = (bar == barCount - 1) ? (frameCount - offset) : segmentSize
+
+            // Calculate RMS using pointer arithmetic
+            var sumSquares: Float = 0.0
+            for i in 0..<count {
+                let sample = pointer[offset + i]
+                sumSquares += sample * sample
+            }
+            let rms = sqrtf(sumSquares / Float(count))
+
+            // Convert to dB, normalize, and clamp
+            if rms < 1e-10 {
+                levels[bar] = 0.0
+            } else {
+                let db = 20.0 * log10f(rms)
+                let normalized = (db - dbFloor) / dbRange
+                levels[bar] = min(max(normalized, 0.0), 1.0)
+            }
+        }
+
+        return levels
     }
 
     // MARK: - CoreAudio Device Selection

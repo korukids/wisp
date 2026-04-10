@@ -8,19 +8,19 @@ final class WordDictionaryStoreTests: XCTestCase {
     private var testDefaults: UserDefaults!
     private var testSuiteName: String!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         testSuiteName = "com.wisp.tests.\(UUID().uuidString)"
         testDefaults = UserDefaults(suiteName: testSuiteName)!
         store = WordDictionaryStore(defaults: testDefaults)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         testDefaults.removePersistentDomain(forName: testSuiteName)
         store = nil
         testDefaults = nil
         testSuiteName = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - add

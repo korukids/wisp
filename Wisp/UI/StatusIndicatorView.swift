@@ -1,5 +1,85 @@
 import AppKit
 
+// MARK: - WaveformBarsView
+
+@MainActor
+final class WaveformBarsView: NSView {
+
+    private static let barCount = 5
+    private static let barWidth: CGFloat = 3
+    private static let barSpacing: CGFloat = 2
+    private static let minHeightRatio: CGFloat = 0.15
+    static let totalWidth: CGFloat = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * barSpacing
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        setupBars()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setupBars() {
+        guard let rootLayer = layer else { return }
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+        for i in 0..<Self.barCount {
+            let bar = CALayer()
+            bar.name = "bar"
+            bar.contentsScale = scale
+            bar.backgroundColor = NSColor.systemRed.cgColor
+            bar.cornerRadius = Self.barWidth / 2
+            bar.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            let x = CGFloat(i) * (Self.barWidth + Self.barSpacing)
+            let minH = bounds.height * Self.minHeightRatio
+            bar.frame = CGRect(
+                x: x,
+                y: (bounds.height - minH) / 2,
+                width: Self.barWidth,
+                height: max(minH, 1)
+            )
+            rootLayer.addSublayer(bar)
+        }
+    }
+
+    func updateAudioLevels(_ levels: [Float]) {
+        guard let bars = layer?.sublayers?.filter({ $0.name == "bar" }),
+              bars.count == Self.barCount else { return }
+
+        let viewHeight = bounds.height
+        for (i, bar) in bars.enumerated() {
+            let rawLevel = i < levels.count ? CGFloat(levels[i]) : 0
+            let level = max(rawLevel, Self.minHeightRatio)
+            let targetHeight = max(viewHeight * level, 1)
+
+            let anim = CABasicAnimation(keyPath: "bounds.size.height")
+            anim.fromValue = bar.bounds.height
+            anim.toValue = targetHeight
+            anim.duration = 0.2
+            anim.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            anim.fillMode = .forwards
+            anim.isRemovedOnCompletion = false
+
+            let posAnim = CABasicAnimation(keyPath: "position.y")
+            posAnim.fromValue = bar.position.y
+            posAnim.toValue = (viewHeight - targetHeight) / 2 + targetHeight / 2
+            posAnim.duration = 0.2
+            posAnim.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            posAnim.fillMode = .forwards
+            posAnim.isRemovedOnCompletion = false
+
+            bar.add(anim, forKey: "heightAnim")
+            bar.add(posAnim, forKey: "posAnim")
+            bar.bounds.size.height = targetHeight
+            bar.position.y = (viewHeight - targetHeight) / 2 + targetHeight / 2
+        }
+    }
+}
+
+// MARK: - StatusIndicatorView
+
 @MainActor
 final class StatusIndicatorView: NSView {
 
@@ -7,6 +87,7 @@ final class StatusIndicatorView: NSView {
     private let label: NSTextField
     private let spinner: NSProgressIndicator
     private let recordingDot: NSView
+    private let waveformBars: WaveformBarsView
     // Container view for the cancel progress bar; the orange fill is a CALayer sublayer
     // so Auto Layout does not interfere with the width animation.
     private let cancelProgressBarContainer: NSView
@@ -19,6 +100,9 @@ final class StatusIndicatorView: NSView {
         label = NSTextField(labelWithString: "")
         spinner = NSProgressIndicator()
         recordingDot = NSView(frame: NSRect(x: 0, y: 0, width: 12, height: 12))
+        waveformBars = WaveformBarsView(
+            frame: NSRect(x: 0, y: 0, width: WaveformBarsView.totalWidth, height: frameRect.height)
+        )
         cancelProgressBarContainer = NSView()
 
         super.init(frame: frameRect)
@@ -28,10 +112,12 @@ final class StatusIndicatorView: NSView {
         addSubview(spinner)
         addSubview(recordingDot)
         addSubview(label)
+        addSubview(waveformBars)
         addSubview(cancelProgressBarContainer)
         setupSpinner()
         setupRecordingDot()
         setupLabel()
+        setupWaveformBars()
         setupCancelProgressBarContainer()
     }
 
@@ -46,11 +132,11 @@ final class StatusIndicatorView: NSView {
 
         switch state {
         case .recording:
-            label.stringValue = "Recording..."
-            label.textColor = NSColor.systemRed
+            label.isHidden = true
             spinner.isHidden = true
             spinner.stopAnimation(nil)
             recordingDot.isHidden = false
+            waveformBars.isHidden = false
             addPulseAnimation()
             stopCancelProgressAnimation()
             isHidden = false
@@ -58,30 +144,36 @@ final class StatusIndicatorView: NSView {
         case .cancelling:
             label.stringValue = "Cancelling..."
             label.textColor = NSColor.systemOrange
+            label.isHidden = false
             spinner.isHidden = true
             spinner.stopAnimation(nil)
             recordingDot.isHidden = true
             recordingDot.layer?.removeAllAnimations()
+            hideWaveformBars()
             startCancelProgressAnimation()
             isHidden = false
 
         case .transcribing:
             label.stringValue = "Transcribing..."
             label.textColor = NSColor.systemBlue
+            label.isHidden = false
             spinner.isHidden = false
             spinner.startAnimation(nil)
             recordingDot.isHidden = true
             recordingDot.layer?.removeAllAnimations()
+            hideWaveformBars()
             stopCancelProgressAnimation()
             isHidden = false
 
         case .error(let message):
             label.stringValue = message
             label.textColor = NSColor.systemOrange
+            label.isHidden = false
             spinner.isHidden = true
             spinner.stopAnimation(nil)
             recordingDot.isHidden = true
             recordingDot.layer?.removeAllAnimations()
+            hideWaveformBars()
             stopCancelProgressAnimation()
             isHidden = false
             scheduleErrorDismiss()
@@ -90,6 +182,7 @@ final class StatusIndicatorView: NSView {
             spinner.stopAnimation(nil)
             recordingDot.layer?.removeAllAnimations()
             recordingDot.isHidden = true
+            waveformBars.isHidden = true
             stopCancelProgressAnimation()
             isHidden = true
         }
@@ -132,7 +225,7 @@ final class StatusIndicatorView: NSView {
 
         NSLayoutConstraint.activate([
             recordingDot.centerYAnchor.constraint(equalTo: centerYAnchor),
-            recordingDot.trailingAnchor.constraint(equalTo: label.leadingAnchor, constant: -5),
+            recordingDot.centerXAnchor.constraint(equalTo: centerXAnchor, constant: -14),
             recordingDot.widthAnchor.constraint(equalToConstant: 7),
             recordingDot.heightAnchor.constraint(equalToConstant: 7),
         ])
@@ -148,6 +241,46 @@ final class StatusIndicatorView: NSView {
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.centerXAnchor.constraint(equalTo: centerXAnchor, constant: 8),
         ])
+    }
+
+    private func setupWaveformBars() {
+        waveformBars.translatesAutoresizingMaskIntoConstraints = false
+        waveformBars.isHidden = true
+
+        NSLayoutConstraint.activate([
+            waveformBars.centerYAnchor.constraint(equalTo: centerYAnchor),
+            waveformBars.leadingAnchor.constraint(equalTo: recordingDot.trailingAnchor, constant: 6),
+            waveformBars.widthAnchor.constraint(equalToConstant: WaveformBarsView.totalWidth),
+            waveformBars.heightAnchor.constraint(equalTo: heightAnchor, multiplier: 0.6),
+        ])
+    }
+
+    func updateAudioLevels(_ levels: [Float]) {
+        waveformBars.updateAudioLevels(levels)
+    }
+
+    private func hideWaveformBars() {
+        guard !waveformBars.isHidden else { return }
+        // Fade out bar layers before hiding the view
+        if let bars = waveformBars.layer?.sublayers?.filter({ $0.name == "bar" }) {
+            for bar in bars {
+                let fade = CABasicAnimation(keyPath: "opacity")
+                fade.fromValue = bar.opacity
+                fade.toValue = 0.0
+                fade.duration = 0.15
+                fade.fillMode = .forwards
+                fade.isRemovedOnCompletion = false
+                bar.add(fade, forKey: "fadeOut")
+            }
+        }
+        // Hide immediately (the fade animation is visual-only via Core Animation)
+        waveformBars.isHidden = true
+        // Reset bar opacity for next recording
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.waveformBars.layer?.sublayers?
+                .filter { $0.name == "bar" }
+                .forEach { $0.removeAnimation(forKey: "fadeOut"); $0.opacity = 1.0 }
+        }
     }
 
     private func setupCancelProgressBarContainer() {

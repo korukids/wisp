@@ -55,7 +55,9 @@ final class MenuBarController: NSObject {
 
         switch state {
         case .idle, .cancelling:
-            button.image = Self.ghostIcon
+            let icon = Self.ghostIcon.copy() as! NSImage
+            icon.accessibilityDescription = state == .idle ? "Wisp — Idle" : "Wisp — Cancelling"
+            button.image = icon
         case .recording:
             button.image = NSImage(
                 systemSymbolName: "mic.fill",

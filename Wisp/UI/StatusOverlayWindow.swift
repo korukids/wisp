@@ -3,7 +3,8 @@ import AppKit
 @MainActor
 final class StatusOverlayWindow: NSPanel {
 
-    private static let overlayWidth: CGFloat = 150
+    private static let defaultWidth: CGFloat = 150
+    private static let recordingWidth: CGFloat = 70
     private static let overlayHeight: CGFloat = 28
 
     private let indicatorView: StatusIndicatorView
@@ -12,7 +13,7 @@ final class StatusOverlayWindow: NSPanel {
         indicatorView = StatusIndicatorView(
             frame: NSRect(
                 x: 0, y: 0,
-                width: StatusOverlayWindow.overlayWidth,
+                width: StatusOverlayWindow.defaultWidth,
                 height: StatusOverlayWindow.overlayHeight
             )
         )
@@ -20,7 +21,7 @@ final class StatusOverlayWindow: NSPanel {
         super.init(
             contentRect: NSRect(
                 x: 0, y: 0,
-                width: StatusOverlayWindow.overlayWidth,
+                width: StatusOverlayWindow.defaultWidth,
                 height: StatusOverlayWindow.overlayHeight
             ),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -50,9 +51,14 @@ final class StatusOverlayWindow: NSPanel {
         NotificationCenter.default.removeObserver(self)
     }
 
+    func updateAudioLevels(_ levels: [Float]) {
+        indicatorView.updateAudioLevels(levels)
+    }
+
     func show(state: IndicatorState) {
         let wasVisible = isVisible
         indicatorView.update(state)
+        updateWindowSize(for: state)
         updateWindowLevel(for: state)
         positionAtBottomCenter()
 
@@ -86,6 +92,27 @@ final class StatusOverlayWindow: NSPanel {
     }
 
     // MARK: - Private
+
+    private func updateWindowSize(for state: IndicatorState) {
+        let targetWidth: CGFloat
+        switch state {
+        case .recording:
+            targetWidth = Self.recordingWidth
+        default:
+            targetWidth = Self.defaultWidth
+        }
+        if abs(frame.width - targetWidth) > 1 {
+            let newFrame = NSRect(
+                x: frame.origin.x, y: frame.origin.y,
+                width: targetWidth, height: Self.overlayHeight
+            )
+            setFrame(newFrame, display: true)
+            indicatorView.frame = NSRect(
+                x: 0, y: 0, width: targetWidth, height: Self.overlayHeight
+            )
+            indicatorView.subviews.first?.frame = indicatorView.bounds  // background
+        }
+    }
 
     private func updateWindowLevel(for state: IndicatorState) {
         switch state {
