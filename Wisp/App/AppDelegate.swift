@@ -7,7 +7,7 @@ import ServiceManagement
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusItem: NSStatusItem?
-    private var state: AppState = .loading
+    private var state: AppState = .idle
     private var currentSession: DictationSession?
 
     private var preferencesStore: PreferencesStore?
@@ -26,8 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var escapeMonitor: Any?
     private var launchOnStartupItem: NSMenuItem?
 
-    // Cancel-countdown state (set when the first Escape is pressed during recording)
-    private var pendingAudioBuffer: Data?
+    // Cancel-countdown state
     private var shouldPasteAfterProcessing = false
     private var cancelCountdownTask: Task<Void, Never>?
 
@@ -51,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             withLength: NSStatusItem.squareLength
         )
         menuBarController = MenuBarController(statusItem: statusItem!)
-        menuBarController?.updateState(.loading)
+        menuBarController?.updateState(.idle)
 
         let menu = NSMenu()
         menu.delegate = self
@@ -126,7 +125,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func setupOverlay() {
         overlayWindow = StatusOverlayWindow()
-        overlayWindow?.show(state: .modelLoading)
     }
 
     private func requestPermissions() {
@@ -165,6 +163,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         textCleanupService = TextCleanupService(preferences: preferences)
         transcriptionService = TranscriptionService()
 
+        // Migrate .env API key to Keychain if not already stored
+        if preferences.apiKey == nil {
+            let env = EnvLoader.load()
+            if let key = env["ELEVENLABS_API_KEY"], !key.isEmpty {
+                preferences.setApiKey(key)
+                print("[Wisp] API key migrated from .env to Keychain")
+            }
+        }
+        if preferences.apiKey != nil {
+            print("[Wisp] API key loaded — ready to dictate")
+        } else {
+            print("[Wisp] WARNING: No API key configured")
+            overlayWindow?.show(state: .error("API key missing — set it in Preferences"))
+        }
+
         hotkeyService = HotkeyService { [weak self] in
             self?.handleHotkeyToggle()
         }
@@ -175,32 +188,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Task { @MainActor [weak self] in
                 self?.handleEscapeKey()
             }
-        }
-
-        // Preload Whisper model and warm up Core ML compilation
-        Task {
-            do {
-                try await transcriptionService?.loadModel()
-                print("[Wisp] Model loaded, warming up...")
-                // Transcribe 1 second of silence to trigger Core ML graph compilation
-                let silentBuffer = Data(count: Int(16000 * 4)) // 1s of 16kHz float32 zeros
-                _ = try? await transcriptionService?.transcribe(audioBuffer: silentBuffer)
-                print("[Wisp] Ready — press configured shortcut to dictate")
-                transitionToIdle()
-            } catch {
-                print("[Wisp] WARNING: Model failed to load: \(error)")
-                print("[Wisp] Transcription will retry on first dictation")
-                overlayWindow?.show(state: .error("Model failed to load"))
-                transitionToIdle()
-            }
-        }
-    }
-
-    private func transitionToIdle() {
-        if case .success(let newState) = state.transition(to: .idle) {
-            state = newState
-            menuBarController?.updateState(.idle)
-            overlayWindow?.hide()
         }
     }
 
@@ -225,15 +212,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if session.audioDuration < 0.5 {
             print("[Wisp] Recording too short, discarding without countdown")
+            _ = audioCaptureService?.stopRecording()
+            audioCaptureService?.onAudioChunk = nil
+            transcriptionService?.cancel()
             handleResult(.discarded(reason: .tooShort))
             return
         }
 
-        guard let audioBuffer = audioCaptureService?.stopRecording() else {
-            print("[Wisp] No audio buffer returned on cancel")
-            handleResult(.failed(error: .microphoneUnavailable))
-            return
-        }
+        _ = audioCaptureService?.stopRecording()
+        audioCaptureService?.onAudioChunk = nil
 
         guard case .success(let newState) = state.transition(to: .cancelling) else {
             print("[Wisp] State transition to cancelling failed")
@@ -245,14 +232,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menuBarController?.updateState(state)
         overlayWindow?.show(state: .cancelling)
 
-        pendingAudioBuffer = audioBuffer
         shouldPasteAfterProcessing = false
 
         cancelCountdownTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .seconds(3))
             } catch {
-                return // Cancelled by second Escape press
+                return
             }
             await MainActor.run { [weak self] in
                 self?.commitCancelledTranscription()
@@ -267,15 +253,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         print("[Wisp] Cancel countdown expired — transcribing silently without paste")
         overlayWindow?.hide()
         state = newState
-        // Menu bar is intentionally not updated here: silent background processing
-        // should not surface a visual indicator. handleResult restores .idle on completion.
 
         cancelCountdownTask = nil
-        guard let buffer = pendingAudioBuffer else { return }
-        pendingAudioBuffer = nil
 
         Task {
-            await transcribeAndSave(audioBuffer: buffer)
+            await commitAndSave()
         }
     }
 
@@ -294,19 +276,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menuBarController?.updateState(state)
         overlayWindow?.show(state: .transcribing)
 
-        guard let buffer = pendingAudioBuffer else { return }
-        pendingAudioBuffer = nil
-
         Task {
-            await transcribeAndPaste(audioBuffer: buffer)
+            await commitAndPaste()
         }
     }
 
     private func handleHotkeyToggle() {
         print("[Wisp] handleHotkeyToggle, state: \(state)")
         switch state {
-        case .loading:
-            print("[Wisp] Ignoring hotkey — model still loading")
         case .idle:
             startRecording()
         case .recording:
@@ -319,6 +296,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func startRecording() {
+        guard let apiKey = preferencesStore?.apiKey, !apiKey.isEmpty else {
+            overlayWindow?.show(state: .error("API key missing — set it in Preferences"))
+            return
+        }
+
         guard case .success(let newState) = state.transition(to: .recording) else {
             print("[Wisp] State transition to recording failed")
             return
@@ -335,7 +317,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        // Sync preferred device UID from preferences before starting
         audioCaptureService?.preferredDeviceUID = preferencesStore?.selectedMicrophoneUID
 
         state = newState
@@ -344,11 +325,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         overlayWindow?.show(state: .recording)
         currentSession = DictationSession()
 
-        menuBarController?.playStartSound { [weak self] in
-            self?.audioCaptureService?.startRecording { [weak self] result in
-                DispatchQueue.main.async {
-                    self?.handleAutoStop(result: result)
-                }
+        let hints = wordDictionary.words
+        let service = transcriptionService
+
+        // Start audio capture and WebSocket connection immediately;
+        // play the beep in parallel so we don't lose the start of speech.
+        menuBarController?.playStartSound(completion: {})
+
+        self.audioCaptureService?.onAudioChunk = { data in
+            service?.sendAudioChunk(data)
+        }
+        self.audioCaptureService?.startRecording { [weak self] result in
+            DispatchQueue.main.async {
+                self?.handleAutoStop(result: result)
+            }
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self, self.state == .recording else { return }
+            do {
+                print("[Wisp] Connecting WebSocket...")
+                try await service?.startSession(apiKey: apiKey, wordHints: hints)
+                print("[Wisp] WebSocket connected")
+            } catch {
+                print("[Wisp] WebSocket connection failed: \(error)")
+                _ = self.audioCaptureService?.stopRecording()
+                self.overlayWindow?.show(
+                    state: .error("Transcription unavailable — check internet connection"))
+                self.currentSession = nil
+                self.state = .idle
+                self.menuBarController?.updateState(.idle)
             }
         }
     }
@@ -375,27 +381,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if session.audioDuration < 0.5 {
             print("[Wisp] Recording too short, discarding")
+            _ = audioCaptureService?.stopRecording()
+            audioCaptureService?.onAudioChunk = nil
+            transcriptionService?.cancel()
             handleResult(.discarded(reason: .tooShort))
             return
         }
 
-        guard let audioBuffer = audioCaptureService?.stopRecording() else {
-            print("[Wisp] No audio buffer returned")
-            handleResult(.failed(error: .microphoneUnavailable))
-            return
-        }
-
-        print("[Wisp] Audio buffer: \(audioBuffer.count) bytes, transcribing...")
+        _ = audioCaptureService?.stopRecording()
+        audioCaptureService?.onAudioChunk = nil
 
         Task {
-            await transcribeAndPaste(audioBuffer: audioBuffer)
+            await commitAndPaste()
         }
     }
 
     private func handleAutoStop(result: AudioCaptureService.AutoStopResult) {
         guard state == .recording else { return }
         switch result {
-        case .maxDurationReached(let buffer):
+        case .maxDurationReached:
             guard case .success(let newState) = state.transition(to: .processing) else {
                 return
             }
@@ -404,22 +408,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menuBarController?.updateState(state)
             overlayWindow?.show(state: .transcribing)
             currentSession?.stop()
+            audioCaptureService?.onAudioChunk = nil
             notificationService?.show(
                 title: "Maximum Duration Reached",
                 message: "Recording stopped after 5 minutes."
             )
             Task {
-                await transcribeAndPaste(audioBuffer: buffer)
+                await commitAndPaste()
             }
         }
     }
 
-    private func transcribeAndPaste(audioBuffer: Data) async {
+    private func commitAndPaste() async {
         do {
-            print("[Wisp] Loading model and transcribing...")
-            let hints = await MainActor.run { wordDictionary.words }
-            let rawText = try await transcriptionService?.transcribe(
-                audioBuffer: audioBuffer, wordHints: hints)
+            print("[Wisp] Committing transcript...")
+            let rawText = try await transcriptionService?.commitAndGetTranscript()
             print("[Wisp] Raw transcription: \(rawText ?? "<nil>")")
             guard let rawText, !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             else {
@@ -428,6 +431,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
             print("[Wisp] Cleaning up text...")
+            let hints = await MainActor.run { wordDictionary.words }
             let cleanedText: String
             if let service = textCleanupService {
                 cleanedText = (try? await service.cleanup(rawText, wordHints: hints)) ?? rawText
@@ -448,8 +452,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 handleResult(.completed(text: cleanedText))
             }
-        } catch let error as TranscriptionError {
-            await MainActor.run { handleResult(.failed(error: error)) }
+        } catch let error as ElevenLabsError {
+            await MainActor.run {
+                handleResult(.failed(error: .processingFailed(message: error.userMessage)))
+            }
         } catch {
             await MainActor.run {
                 handleResult(.failed(error: .processingFailed(message: error.localizedDescription)))
@@ -457,16 +463,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    private func transcribeAndSave(audioBuffer: Data) async {
+    private func commitAndSave() async {
         do {
-            let hints = await MainActor.run { wordDictionary.words }
-            let rawText = try await transcriptionService?.transcribe(
-                audioBuffer: audioBuffer, wordHints: hints)
+            let rawText = try await transcriptionService?.commitAndGetTranscript()
             guard let rawText, !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                // No speech detected — silently reset to idle with no notification
                 await MainActor.run { silentlyResetToIdle() }
                 return
             }
+            let hints = await MainActor.run { wordDictionary.words }
             let cleanedText: String
             if let service = textCleanupService {
                 cleanedText = (try? await service.cleanup(rawText, wordHints: hints)) ?? rawText
@@ -477,7 +481,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 handleResult(.completed(text: cleanedText))
             }
         } catch {
-            // Transcription failed during cancelled recording — silently discard per spec
             await MainActor.run { silentlyResetToIdle() }
         }
     }
@@ -528,10 +531,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func describeError(_ error: TranscriptionError) -> String {
         switch error {
-        case .modelNotLoaded:
-            return "Speech recognition model is not available."
         case .processingFailed(let message):
-            return "Processing error: \(message)"
+            return message
         case .microphoneUnavailable:
             return "Microphone is not accessible."
         case .permissionDenied:

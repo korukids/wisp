@@ -12,6 +12,7 @@ final class PreferencesWindow: NSWindowController {
         wordDictionary: WordDictionaryStore
     ) {
         NSApp.setActivationPolicy(.regular)
+        installEditMenuIfNeeded()
         NSApp.activate(ignoringOtherApps: true)
         if let existing = shared {
             existing.window?.makeKeyAndOrderFront(nil)
@@ -60,6 +61,26 @@ final class PreferencesWindow: NSWindowController {
     }
 
     required init?(coder: NSCoder) { nil }
+
+    /// Ensures the app has an Edit menu so Cmd+V/C/X/A work in text fields.
+    private static func installEditMenuIfNeeded() {
+        if NSApp.mainMenu == nil {
+            NSApp.mainMenu = NSMenu()
+        }
+        let mainMenu = NSApp.mainMenu!
+        // Don't add a second Edit menu if one already exists
+        guard mainMenu.item(withTitle: "Edit") == nil else { return }
+
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        let editMenuItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+    }
 
     @objc private func windowWillClose(_ notification: Notification) {
         PreferencesWindow.shared = nil

@@ -54,11 +54,6 @@ final class MenuBarController: NSObject {
         guard let button = statusItem.button else { return }
 
         switch state {
-        case .loading:
-            button.image = NSImage(
-                systemSymbolName: "hourglass",
-                accessibilityDescription: "Wisp — Loading"
-            )
         case .idle, .cancelling:
             button.image = Self.ghostIcon
         case .recording:

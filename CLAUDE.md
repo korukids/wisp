@@ -1,6 +1,6 @@
 # wisp Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-03-29
+Auto-generated from all feature plans. Last updated: 2026-04-10
 
 ## Active Technologies
 - Swift 6.2 with strict concurrency checking + AppKit (NSPanel, Core Animation), WhisperKit (existing) (002-status-indicator-gui)
@@ -14,6 +14,8 @@ Auto-generated from all feature plans. Last updated: 2026-03-29
 - UserDefaults (startup preference, keyed on existing PreferencesStore) (006-polish-and-cleanup)
 - Swift 6.1+ with strict concurrency checking enabled + WhisperKit (existing), FoundationModels (existing), AppKit + SwiftUI (existing), KeyboardShortcuts (existing) (007-custom-word-dictionary)
 - UserDefaults (`com.wisp.wordDictionary` → `[String]`) (007-custom-word-dictionary)
+- Swift 6.2 with strict concurrency checking + KeyboardShortcuts 2.x (existing), URLSessionWebSocketTask (system framework), AVFoundation (existing) (008-elevenlabs-speech-to-text)
+- UserDefaults (existing preferences, word dictionary), `.env` file (API key) (008-elevenlabs-speech-to-text)
 
 - Swift 5.9+ with strict concurrency checking + WhisperKit (Argmax), KeyboardShortcuts (Sindre Sorhus), AppKi (001-core-dictation-flow)
 
@@ -33,9 +35,9 @@ tests/
 Swift 5.9+ with strict concurrency checking: Follow standard conventions
 
 ## Recent Changes
+- 008-elevenlabs-speech-to-text: Added Swift 6.2 with strict concurrency checking + KeyboardShortcuts 2.x (existing), URLSessionWebSocketTask (system framework), AVFoundation (existing)
 - 007-custom-word-dictionary: Added Swift 6.1+ with strict concurrency checking enabled + WhisperKit (existing), FoundationModels (existing), AppKit + SwiftUI (existing), KeyboardShortcuts (existing)
 - 006-polish-and-cleanup: Added Swift 6.1+ with strict concurrency checking enabled + AppKit (NSSound, NSStatusItem, NSMenu), ServiceManagement (SMAppService), AVFoundation (existing)
-- 005-escape-cancel-countdown: Added Swift 6.1+ with strict concurrency checking enabled + AppKit (NSPanel, Core Animation), WhisperKit (existing), AVFoundation (existing)
 
 
 <!-- MANUAL ADDITIONS START -->

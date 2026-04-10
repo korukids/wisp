@@ -61,34 +61,6 @@ final class AppStateTests: XCTestCase {
         }
     }
 
-    // MARK: - Loading State Transitions
-
-    func testLoadingToIdleSucceeds() {
-        let state = AppState.loading
-        let result = state.transition(to: .idle)
-        XCTAssertEqual(try result.get(), .idle)
-    }
-
-    func testLoadingToRecordingFails() {
-        let state = AppState.loading
-        let result = state.transition(to: .recording)
-        if case .failure(let error) = result {
-            XCTAssertEqual(error, .invalidTransition(from: .loading, to: .recording))
-        } else {
-            XCTFail("Expected failure for loading → recording")
-        }
-    }
-
-    func testLoadingToProcessingFails() {
-        let state = AppState.loading
-        let result = state.transition(to: .processing)
-        if case .failure = result {
-            // expected
-        } else {
-            XCTFail("Expected failure for loading → processing")
-        }
-    }
-
     // MARK: - Cancelling State Transitions
 
     func testRecordingToCancellingSucceeds() {

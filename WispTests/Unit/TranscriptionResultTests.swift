@@ -30,11 +30,6 @@ final class TranscriptionResultTests: XCTestCase {
         }
     }
 
-    func testFailedModelNotLoaded() {
-        let error = TranscriptionError.modelNotLoaded
-        XCTAssertEqual(error, .modelNotLoaded)
-    }
-
     func testFailedProcessingError() {
         let error = TranscriptionError.processingFailed(message: "out of memory")
         XCTAssertEqual(error, .processingFailed(message: "out of memory"))

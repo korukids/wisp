@@ -16,6 +16,9 @@ final class AudioCaptureService: @unchecked Sendable {
     /// When nil the system default input device is used.
     var preferredDeviceUID: String?
 
+    /// Called with each audio chunk as it arrives from the tap, for real-time streaming.
+    var onAudioChunk: (@Sendable (Data) -> Void)?
+
     private let lock = NSLock()
     private var audioEngine: AVAudioEngine?
     private var audioBuffer = Data()
@@ -95,7 +98,9 @@ final class AudioCaptureService: @unchecked Sendable {
                     )
                     self.lock.lock()
                     self.audioBuffer.append(data)
+                    let chunkHandler = self.onAudioChunk
                     self.lock.unlock()
+                    chunkHandler?(data)
                 }
             } else if let channelData = buffer.floatChannelData {
                 let data = Data(
@@ -104,7 +109,9 @@ final class AudioCaptureService: @unchecked Sendable {
                 )
                 self.lock.lock()
                 self.audioBuffer.append(data)
+                let chunkHandler = self.onAudioChunk
                 self.lock.unlock()
+                chunkHandler?(data)
             }
         }
 

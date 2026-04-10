@@ -1,7 +1,6 @@
 import Foundation
 
 enum AppState: Equatable, Sendable {
-    case loading
     case idle
     case recording
     case cancelling
@@ -13,8 +12,6 @@ enum AppState: Equatable, Sendable {
 
     func transition(to newState: AppState) -> Result<AppState, TransitionError> {
         switch (self, newState) {
-        case (.loading, .idle):
-            return .success(.idle)
         case (.idle, .recording):
             return .success(.recording)
         case (.recording, .cancelling):

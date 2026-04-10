@@ -1,25 +1,27 @@
 <!--
   Sync Impact Report
   ==================================================
-  Version change: 0.0.0 → 1.0.0
-  Bump rationale: Initial constitution — MAJOR (first ratification)
+  Version change: 1.0.0 → 2.0.0
+  Bump rationale: MAJOR — Principle I redefined from
+    "Privacy-First Local Processing" to "User-Controlled
+    Processing", allowing cloud transcription when user
+    explicitly configures an API key. ML Runtime constraint
+    updated to reflect cloud-first backend. "No cloud sync"
+    removed from Principle V.
 
-  Modified principles: N/A (initial)
-  Added sections:
-    - Core Principles (5): Privacy-First Local Processing,
-      Type Safety & Correctness, Test-First Development,
-      Performance-Conscious Design, Simplicity & YAGNI
-    - Platform & Technology Constraints
-    - Development Workflow
-    - Governance
+  Modified principles:
+    - I: Privacy-First Local Processing → User-Controlled Processing
+    - V: Removed "no cloud sync" clause
+  Modified constraints:
+    - ML Runtime: local-only → cloud API primary, local optional
 
   Removed sections: None
+  Added sections: None
 
   Templates requiring updates:
     - .specify/templates/plan-template.md ✅ no updates needed
     - .specify/templates/spec-template.md ✅ no updates needed
     - .specify/templates/tasks-template.md ✅ no updates needed
-    - No command files in .specify/templates/commands/
 
   Follow-up TODOs: None
   ==================================================
@@ -29,16 +31,20 @@
 
 ## Core Principles
 
-### I. Privacy-First Local Processing
+### I. User-Controlled Processing
 
-All audio capture and transcription MUST occur entirely on-device
-using a local Whisper model. No audio data, transcription results,
-or usage telemetry leaves the user's machine. Network access is
-permitted only for model downloads initiated explicitly by the user.
+Audio transcription MAY use cloud-based speech-to-text services
+when the user has explicitly configured an API key for that
+service. The user's choice of transcription backend (local or
+cloud) MUST be respected. No audio data or transcription results
+are sent to any service without explicit user configuration.
+No usage telemetry leaves the user's machine under any
+circumstances.
 
-**Rationale**: Wisp handles raw microphone input — the most
-sensitive category of user data. Local-only processing is a
-non-negotiable trust guarantee.
+**Rationale**: Wisp handles raw microphone input — sensitive
+user data. The user must remain in full control of where their
+audio is processed, but cloud transcription offers significantly
+lower latency that justifies the tradeoff when the user opts in.
 
 ### II. Type Safety & Correctness
 
@@ -87,7 +93,7 @@ have a single, clear responsibility. Abstractions are permitted
 only when they eliminate duplication across three or more call
 sites. Configuration options MUST be limited to what users
 actually need (hotkey, microphone selection, model choice).
-No plugin systems, no scripting APIs, no cloud sync.
+No plugin systems, no scripting APIs.
 
 **Rationale**: Wisp is a focused utility, not a platform.
 Complexity in a background app means more surface area for
@@ -101,8 +107,9 @@ bugs that go unnoticed.
   permitted for settings/preferences panels only
 - **Audio**: AVFoundation for capture; no third-party audio libs
   unless AVFoundation proves insufficient (document justification)
-- **ML Runtime**: Core ML or llama.cpp-based Whisper port;
-  model MUST run on CPU+GPU via Metal, no cloud fallback
+- **ML Runtime**: Cloud speech-to-text API (ElevenLabs) as
+  primary transcription backend; local models permitted as
+  alternative when configured
 - **Text Cleanup**: Apple Foundation Models (on-device LLM) for
   filler word removal and formatting; falls back to raw Whisper
   output if unavailable
@@ -151,4 +158,4 @@ principles, the constitution wins unless formally amended.
 Constitution Check section verifying alignment with these
 principles before implementation begins.
 
-**Version**: 1.0.0 | **Ratified**: 2026-03-28 | **Last Amended**: 2026-03-28
+**Version**: 2.0.0 | **Ratified**: 2026-03-28 | **Last Amended**: 2026-04-10
