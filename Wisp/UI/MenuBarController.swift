@@ -73,7 +73,7 @@ final class MenuBarController: NSObject {
     /// Falls back to calling `completion` immediately if the sound asset is unavailable,
     /// and after 1 second if the delegate callback never fires.
     func playStartSound(completion: @escaping @MainActor () -> Void) {
-        guard let url = Bundle.module.url(forResource: "record-start", withExtension: "wav"),
+        guard let url = Bundle.moduleResources.url(forResource: "record-start", withExtension: "wav"),
             let sound = NSSound(contentsOf: url, byReference: true)
         else {
             completion()
@@ -97,7 +97,7 @@ final class MenuBarController: NSObject {
     }
 
     func playStopSound() {
-        guard let url = Bundle.module.url(forResource: "record-stop", withExtension: "wav") else {
+        guard let url = Bundle.moduleResources.url(forResource: "record-stop", withExtension: "wav") else {
             print("[Wisp] Sound not found: record-stop.wav")
             return
         }

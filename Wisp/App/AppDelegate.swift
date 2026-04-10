@@ -49,6 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(
             withLength: NSStatusItem.squareLength
         )
+        statusItem?.autosaveName = "com.wisp.statusItem"
+        statusItem?.isVisible = true
         menuBarController = MenuBarController(statusItem: statusItem!)
         menuBarController?.updateState(.idle)
 
